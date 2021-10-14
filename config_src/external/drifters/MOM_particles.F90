@@ -13,7 +13,7 @@ public particles_run, particles_init, particles_save_restart, particles_end
 contains
 
 !> Initializes particles container "parts"
-subroutine particles_init(parts, Grid, Time, dt, u, v)
+subroutine particles_init(parts, Grid, Time, dt, u, v,h)
   ! Arguments
  type(particles), pointer, intent(out) :: parts !< Container for all types and memory
  type(ocean_grid_type), target, intent(in) :: Grid !< Grid type from parent model
@@ -21,6 +21,7 @@ subroutine particles_init(parts, Grid, Time, dt, u, v)
  real, intent(in)            :: dt !< particle timestep in seconds
  real, dimension(:,:,:),intent(in)      :: u !< Zonal velocity field
  real, dimension(:,:,:),intent(in)      :: v !< Meridional velocity field
+ real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer
 
 end subroutine particles_init
 

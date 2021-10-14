@@ -2886,7 +2886,7 @@ subroutine finish_MOM_initialization(Time, dirs, CS, restart_CSp)
 
 
   if (CS%use_particles) then
-    call particles_init(CS%particles, G, CS%Time, CS%dt_therm, CS%u, CS%v)
+    call particles_init(CS%particles, G, CS%Time, CS%dt_therm, CS%u, CS%v,CS%h)
   endif
 
   ! Write initial conditions
