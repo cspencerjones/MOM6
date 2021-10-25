@@ -50,9 +50,10 @@ real,dimension(:,:,:),optional,intent(in) ::  salt !< Optional container for sal
 end subroutine particles_save_restart
 
 !> Deallocate all memory and disassociated pointer
-subroutine particles_end(parts,temp,salt)
+subroutine particles_end(parts,h,temp,salt)
 ! Arguments
 type(particles), pointer :: parts !< Container for all types and memory
+real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer 
 real,dimension(:,:,:),optional,intent(in) :: temp !< Optional container for temperature
 real,dimension(:,:,:),optional,intent(in) :: salt !< Optional container for salinity
 

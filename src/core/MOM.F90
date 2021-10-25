@@ -3616,7 +3616,7 @@ subroutine MOM_end(CS)
   endif
 
   if (CS%use_particles) then
-     call particles_end(CS%particles)
+     call particles_end(CS%particles,CS%h)
      deallocate(CS%particles)
   endif
 
