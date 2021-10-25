@@ -40,9 +40,10 @@ end subroutine particles_run
 
 
 !>Save particle locations (and sometimes other vars) to restart file
-subroutine particles_save_restart(parts,temp,salt)
+subroutine particles_save_restart(parts,h,temp,salt)
 ! Arguments
 type(particles), pointer :: parts !< Container for all types and memory
+real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer  
 real,dimension(:,:,:),optional,intent(in) :: temp !< Optional container for temperature
 real,dimension(:,:,:),optional,intent(in) ::  salt !< Optional container for salinity
 

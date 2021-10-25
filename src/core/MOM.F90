@@ -3582,7 +3582,7 @@ subroutine MOM_end(CS)
   type(MOM_control_struct), intent(inout) :: CS   !< MOM control structure
 
   if (CS%use_particles) then
-    call particles_save_restart(CS%particles)
+    call particles_save_restart(CS%particles,CS%h)
   endif
 
   call MOM_sum_output_end(CS%sum_output_CSp)
