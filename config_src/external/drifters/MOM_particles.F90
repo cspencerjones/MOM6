@@ -9,6 +9,7 @@ use MOM_variables,    only : thermo_var_ptrs
 use particles_types_mod, only: particles, particles_gridded
 
 public particles_run, particles_init, particles_save_restart, particles_end
+public particles_to_k_space, particles_to_z_space
 
 contains
 
@@ -58,5 +59,20 @@ real,dimension(:,:,:),optional,intent(in) :: temp !< Optional container for temp
 real,dimension(:,:,:),optional,intent(in) :: salt !< Optional container for salinity
 
 end subroutine particles_end
+
+subroutine particles_to_k_space(parts,h)
+   ! Arguments
+   type(particles), pointer :: parts !< Container for all types and memory
+   real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers 
+
+end subroutine particles_to_k_space
+
+
+subroutine particles_to_z_space(parts,h)
+   ! Arguments                                                                 
+   type(particles), pointer :: parts !< Container for all types and memory
+   real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers
+ 
+end subroutine particles_to_z_space
 
 end module MOM_particles_mod
