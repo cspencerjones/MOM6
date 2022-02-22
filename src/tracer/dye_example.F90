@@ -56,7 +56,7 @@ type, public :: dye_tracer_CS ; private
   type(MOM_restart_CS), pointer :: restart_CSp => NULL() !< A pointer to the restart control structure
 
   type(vardesc), allocatable :: tr_desc(:) !< Descriptions and metadata for the tracers
-  logical :: tracers_may_reinit = .false. !< If true the tracers may be initialized if not found in a restart file
+  logical :: tracers_may_reinit = .true. !< If true the tracers may be initialized if not found in a restart file - hacked here by CSJ
 end type dye_tracer_CS
 
 contains
@@ -299,26 +299,26 @@ subroutine dye_tracer_column_physics(h_old, h_new, ea, eb, fluxes, dt, G, GV, US
     enddo
   endif
 
-  do m=1,CS%ntr
-    do j=G%jsd,G%jed ; do i=G%isd,G%ied
+!  do m=1,CS%ntr
+!    do j=G%jsd,G%jed ; do i=G%isd,G%ied
       ! A dye is set dependent on the center of the cell being inside the rectangular box.
-      if (CS%dye_source_minlon(m)<G%geoLonT(i,j) .and. &
-          CS%dye_source_maxlon(m)>=G%geoLonT(i,j) .and. &
-          CS%dye_source_minlat(m)<G%geoLatT(i,j) .and. &
-          CS%dye_source_maxlat(m)>=G%geoLatT(i,j) .and. &
-          G%mask2dT(i,j) > 0.0 ) then
-        z_bot = 0.0
-        do k=1,nz
-          z_bot = z_bot - h_new(i,j,k)*GV%H_to_Z
-          z_center = z_bot + 0.5*h_new(i,j,k)*GV%H_to_Z
-          if ( z_center > -CS%dye_source_maxdepth(m) .and. &
-               z_center < -CS%dye_source_mindepth(m) ) then
-            CS%tr(i,j,k,m) = 1.0
-          endif
-        enddo
-      endif
-    enddo ; enddo
-  enddo
+!      if (CS%dye_source_minlon(m)<G%geoLonT(i,j) .and. &
+!          CS%dye_source_maxlon(m)>=G%geoLonT(i,j) .and. &
+!          CS%dye_source_minlat(m)<G%geoLatT(i,j) .and. &
+!          CS%dye_source_maxlat(m)>=G%geoLatT(i,j) .and. &
+!          G%mask2dT(i,j) > 0.0 ) then
+!        z_bot = 0.0
+!        do k=1,nz
+!          z_bot = z_bot - h_new(i,j,k)*GV%H_to_Z
+!          z_center = z_bot + 0.5*h_new(i,j,k)*GV%H_to_Z
+!          if ( z_center > -CS%dye_source_maxdepth(m) .and. &
+!               z_center < -CS%dye_source_mindepth(m) ) then
+!            CS%tr(i,j,k,m) = 1.0
+!          endif
+!        enddo
+!      endif
+!    enddo ; enddo
+!  enddo
 
 end subroutine dye_tracer_column_physics
 
