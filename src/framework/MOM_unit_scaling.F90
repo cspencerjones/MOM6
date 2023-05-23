@@ -30,6 +30,10 @@ type, public :: unit_scale_type
   real :: kg_m3_to_R !< A constant that translates kilograms per meter cubed to the units of density  [R m3 kg-1 ~> 1]
   real :: Q_to_J_kg  !< A constant that translates the units of enthalpy to Joules per kilogram      [J kg-1 Q-1 ~> 1]
   real :: J_kg_to_Q  !< A constant that translates Joules per kilogram to the units of enthalpy        [Q kg J-1 ~> 1]
+  real :: C_to_degC  !< A constant that translates the units of temperature to degrees Celsius         [degC C-1 ~> 1]
+  real :: degC_to_C  !< A constant that translates degrees Celsius to the units of temperature         [C degC-1 ~> 1]
+  real :: S_to_ppt   !< A constant that translates the units of salinity to parts per thousand          [ppt S-1 ~> 1]
+  real :: ppt_to_S   !< A constant that translates parts per thousand to the units of salinity          [S ppt-1 ~> 1]
 
   ! These are useful combinations of the fundamental scale conversion factors above.
   real :: Z_to_L          !< Convert vertical distances to lateral lengths                                [L Z-1 ~> 1]
@@ -37,7 +41,7 @@ type, public :: unit_scale_type
   real :: L_T_to_m_s      !< Convert lateral velocities from L T-1 to m s-1                         [T m L-1 s-1 ~> 1]
   real :: m_s_to_L_T      !< Convert lateral velocities from m s-1 to L T-1                         [L s T-1 m-1 ~> 1]
   real :: L_T2_to_m_s2    !< Convert lateral accelerations from L T-2 to m s-2                     [L s2 T-2 m-1 ~> 1]
-  real :: Z2_T_to_m2_s    !< Convert vertical diffusivities from Z2 T-1 to m2 s-1                 [T1 m2 Z-2 s-1 ~> 1]
+  real :: Z2_T_to_m2_s    !< Convert vertical diffusivities from Z2 T-1 to m2 s-1                  [T m2 Z-2 s-1 ~> 1]
   real :: m2_s_to_Z2_T    !< Convert vertical diffusivities from m2 s-1 to Z2 T-1                  [Z2 s T-1 m-2 ~> 1]
   real :: W_m2_to_QRZ_T   !< Convert heat fluxes from W m-2 to Q R Z T-1                       [Q R Z m2 T-1 W-1 ~> 1]
   real :: QRZ_T_to_W_m2   !< Convert heat fluxes from Q R Z T-1 to W m-2                    [W T Q-1 R-1 Z-1 m-2 ~> 1]
@@ -48,14 +52,15 @@ type, public :: unit_scale_type
   real :: RZ3_T3_to_W_m2  !< Convert turbulent kinetic energy fluxes from R Z3 T-3 to W m-2    [W T3 R-1 Z-3 m-2 ~> 1]
   real :: W_m2_to_RZ3_T3  !< Convert turbulent kinetic energy fluxes from W m-2 to R Z3 T-3     [R Z3 m2 T-3 W-1 ~> 1]
   real :: RL2_T2_to_Pa    !< Convert pressures from R L2 T-2 to Pa                                [Pa T2 R-1 L-2 ~> 1]
-  ! Not used enough:  real :: Pa_to_RL2_T2    !< Convert pressures from Pa to R L2 T-2            [R L2 T-2 Pa-1 ~> 1]
+  real :: Pa_to_RL2_T2    !< Convert pressures from Pa to R L2 T-2                                [R L2 T-2 Pa-1 ~> 1]
+  real :: Pa_to_RLZ_T2    !< Convert wind stresses from Pa to R L Z T-2                          [R L Z T-2 Pa-1 ~> 1]
 
-  ! These are used for changing scaling across restarts.
-  real :: m_to_Z_restart = 0.0 !< A copy of the m_to_Z that is used in restart files.
-  real :: m_to_L_restart = 0.0 !< A copy of the m_to_L that is used in restart files.
-  real :: s_to_T_restart = 0.0 !< A copy of the s_to_T that is used in restart files.
-  real :: kg_m3_to_R_restart = 0.0 !< A copy of the kg_m3_to_R that is used in restart files.
-  real :: J_kg_to_Q_restart = 0.0 !< A copy of the J_kg_to_Q that is used in restart files.
+  ! These are no longer used for changing scaling across restarts.
+  real :: m_to_Z_restart = 1.0 !< A copy of the m_to_Z that is used in restart files.
+  real :: m_to_L_restart = 1.0 !< A copy of the m_to_L that is used in restart files.
+  real :: s_to_T_restart = 1.0 !< A copy of the s_to_T that is used in restart files.
+  real :: kg_m3_to_R_restart = 1.0 !< A copy of the kg_m3_to_R that is used in restart files.
+  real :: J_kg_to_Q_restart = 1.0 !< A copy of the J_kg_to_Q that is used in restart files.
 end type unit_scale_type
 
 contains
@@ -68,8 +73,9 @@ subroutine unit_scaling_init( param_file, US )
   ! This routine initializes a unit_scale_type structure (US).
 
   ! Local variables
-  integer :: Z_power, L_power, T_power, R_power, Q_power
+  integer :: Z_power, L_power, T_power, R_power, Q_power, C_power, S_power
   real    :: Z_rescale_factor, L_rescale_factor, T_rescale_factor, R_rescale_factor, Q_rescale_factor
+  real    :: C_rescale_factor, S_rescale_factor
   ! This include declares and sets the variable "version".
 # include "version_variable.h"
   character(len=16) :: mdl = "MOM_unit_scaling"
@@ -84,23 +90,31 @@ subroutine unit_scaling_init( param_file, US )
   call get_param(param_file, mdl, "Z_RESCALE_POWER", Z_power, &
                "An integer power of 2 that is used to rescale the model's "//&
                "internal units of depths and heights.  Valid values range from -300 to 300.", &
-               units="nondim", default=0, debuggingParam=.true.)
+               default=0, debuggingParam=.true.)
   call get_param(param_file, mdl, "L_RESCALE_POWER", L_power, &
                "An integer power of 2 that is used to rescale the model's "//&
                "internal units of lateral distances.  Valid values range from -300 to 300.", &
-               units="nondim", default=0, debuggingParam=.true.)
+               default=0, debuggingParam=.true.)
   call get_param(param_file, mdl, "T_RESCALE_POWER", T_power, &
                "An integer power of 2 that is used to rescale the model's "//&
                "internal units of time.  Valid values range from -300 to 300.", &
-               units="nondim", default=0, debuggingParam=.true.)
+               default=0, debuggingParam=.true.)
   call get_param(param_file, mdl, "R_RESCALE_POWER", R_power, &
                "An integer power of 2 that is used to rescale the model's "//&
                "internal units of density.  Valid values range from -300 to 300.", &
-               units="nondim", default=0, debuggingParam=.true.)
+               default=0, debuggingParam=.true.)
   call get_param(param_file, mdl, "Q_RESCALE_POWER", Q_power, &
                "An integer power of 2 that is used to rescale the model's "//&
-                 "internal units of heat content.  Valid values range from -300 to 300.", &
-                 units="nondim", default=0, debuggingParam=.true.)
+               "internal units of heat content.  Valid values range from -300 to 300.", &
+               default=0, debuggingParam=.true.)
+  call get_param(param_file, mdl, "C_RESCALE_POWER", C_power, &
+               "An integer power of 2 that is used to rescale the model's "//&
+               "internal units of temperature.  Valid values range from -300 to 300.", &
+               default=0, debuggingParam=.true.)
+  call get_param(param_file, mdl, "S_RESCALE_POWER", S_power, &
+               "An integer power of 2 that is used to rescale the model's "//&
+               "internal units of salinity.  Valid values range from -300 to 300.", &
+               default=0, debuggingParam=.true.)
 
   if (abs(Z_power) > 300) call MOM_error(FATAL, "unit_scaling_init: "//&
                  "Z_RESCALE_POWER is outside of the valid range of -300 to 300.")
@@ -112,6 +126,10 @@ subroutine unit_scaling_init( param_file, US )
                  "R_RESCALE_POWER is outside of the valid range of -300 to 300.")
   if (abs(Q_power) > 300) call MOM_error(FATAL, "unit_scaling_init: "//&
                  "Q_RESCALE_POWER is outside of the valid range of -300 to 300.")
+  if (abs(C_power) > 300) call MOM_error(FATAL, "unit_scaling_init: "//&
+                 "C_RESCALE_POWER is outside of the valid range of -300 to 300.")
+  if (abs(S_power) > 300) call MOM_error(FATAL, "unit_scaling_init: "//&
+                 "S_RESCALE_POWER is outside of the valid range of -300 to 300.")
 
   Z_rescale_factor = 1.0
   if (Z_power /= 0) Z_rescale_factor = 2.0**Z_power
@@ -138,6 +156,16 @@ subroutine unit_scaling_init( param_file, US )
   US%Q_to_J_kg = 1.0 * Q_Rescale_factor
   US%J_kg_to_Q = 1.0 / Q_Rescale_factor
 
+  C_Rescale_factor = 1.0
+  if (C_power /= 0) C_Rescale_factor = 2.0**C_power
+  US%C_to_degC = 1.0 * C_Rescale_factor
+  US%degC_to_C = 1.0 / C_Rescale_factor
+
+  S_Rescale_factor = 1.0
+  if (S_power /= 0) S_Rescale_factor = 2.0**S_power
+  US%S_to_ppt = 1.0 * S_Rescale_factor
+  US%ppt_to_S = 1.0 / S_Rescale_factor
+
   call set_unit_scaling_combos(US)
 end subroutine unit_scaling_init
 
@@ -154,6 +182,8 @@ subroutine unit_no_scaling_init(US)
   US%T_to_s = 1.0 ; US%s_to_T = 1.0
   US%R_to_kg_m3 = 1.0 ; US%kg_m3_to_R = 1.0
   US%Q_to_J_kg = 1.0 ; US%J_kg_to_Q = 1.0
+  US%C_to_degC = 1.0 ; US%degC_to_C = 1.0
+  US%S_to_ppt = 1.0 ; US%ppt_to_S = 1.0
 
   call set_unit_scaling_combos(US)
 end subroutine unit_no_scaling_init
@@ -189,21 +219,33 @@ subroutine set_unit_scaling_combos(US)
   US%QRZ_T_to_W_m2 = US%Q_to_J_kg * US%R_to_kg_m3 * US%Z_to_m * US%s_to_T
   ! Pressures:
   US%RL2_T2_to_Pa = US%R_to_kg_m3 * US%L_T_to_m_s**2
-    ! It does not seem like US%Pa_to_RL2_T2 would be used enough in MOM6 to justify its existence.
-  ! US%Pa_to_RL2_T2 = US%kg_m3_to_R * US%m_s_to_L_T**2
+  US%Pa_to_RL2_T2 = US%kg_m3_to_R * US%m_s_to_L_T**2
+  ! Wind stresses:
+  US%Pa_to_RLZ_T2 = US%kg_m3_to_R * US%m_s_to_L_T**2 * US%L_to_Z
 
 end subroutine set_unit_scaling_combos
 
 !> Set the unit scaling factors for output to restart files to the unit scaling
 !! factors for this run.
-subroutine fix_restart_unit_scaling(US)
+subroutine fix_restart_unit_scaling(US, unscaled)
   type(unit_scale_type), intent(inout) :: US !< A dimensional unit scaling type
+  logical,     optional, intent(in)    :: unscaled !< If true, set the restart factors as though the
+                                             !! model would be unscaled, which is appropriate if the
+                                             !! scaling is undone when writing a restart file.
 
-  US%m_to_Z_restart = US%m_to_Z
-  US%m_to_L_restart = US%m_to_L
-  US%s_to_T_restart = US%s_to_T
-  US%kg_m3_to_R_restart = US%kg_m3_to_R
-  US%J_kg_to_Q_restart = US%J_kg_to_Q
+  US%m_to_Z_restart = 1.0 ! US%m_to_Z
+  US%m_to_L_restart = 1.0 ! US%m_to_L
+  US%s_to_T_restart = 1.0 ! US%s_to_T
+  US%kg_m3_to_R_restart = 1.0 ! US%kg_m3_to_R
+  US%J_kg_to_Q_restart = 1.0 ! US%J_kg_to_Q
+
+  if (present(unscaled)) then ; if (unscaled) then
+    US%m_to_Z_restart = 1.0
+    US%m_to_L_restart = 1.0
+    US%s_to_T_restart = 1.0
+    US%kg_m3_to_R_restart = 1.0
+    US%J_kg_to_Q_restart = 1.0
+  endif ; endif
 
 end subroutine fix_restart_unit_scaling
 
