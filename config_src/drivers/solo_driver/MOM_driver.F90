@@ -625,10 +625,12 @@ program MOM6
   call diag_mediator_end(Time, diag, end_diag_manager=.true.)
   if (cpu_steps > 0) call write_cputime(Time, ns-1, write_CPU_CSp, call_end=.true.)
   call cpu_clock_end(termClock)
+  
+  call MOM_end(MOM_CSp)
 
   call io_infra_end ; call MOM_infra_end
 
-  call MOM_end(MOM_CSp)
+  !call MOM_end(MOM_CSp)
 
 contains
 
