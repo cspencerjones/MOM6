@@ -3894,7 +3894,7 @@ subroutine save_MOM6_internal_state(CS, dirs, time, stamp_time)
 
     ! Could call save_restart(CS%restart_CSp) here
 
-    if (CS%use_particles) call particles_save_restart(CS%particles)
+    if (CS%use_particles) call particles_save_restart(CS%particles,CS%h)
 
 end subroutine save_MOM6_internal_state
 
@@ -3902,10 +3902,6 @@ end subroutine save_MOM6_internal_state
 !> End of ocean model, including memory deallocation
 subroutine MOM_end(CS)
   type(MOM_control_struct), intent(inout) :: CS   !< MOM control structure
-
-  if (CS%use_particles) then
-    call particles_save_restart(CS%particles,CS%h)
-  endif
 
   call MOM_sum_output_end(CS%sum_output_CSp)
 
