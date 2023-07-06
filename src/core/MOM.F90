@@ -48,6 +48,7 @@ use MOM_time_manager,         only : time_type, real_to_time, time_type_to_real,
 use MOM_time_manager,         only : operator(-), operator(>), operator(*), operator(/)
 use MOM_time_manager,         only : operator(>=), operator(==), increment_date
 use MOM_unit_tests,           only : unit_tests
+use posix,                    only : mkdir
 
 ! MOM core modules
 use MOM_ALE,                   only : ALE_init, ALE_end, ALE_regrid, ALE_CS, adjustGridForIntegrity
@@ -3928,6 +3929,16 @@ subroutine save_MOM_restart(CS, directory, time, G, time_stamped, filename, &
     !< number of restart files written
   logical, optional, intent(in) :: write_IC
     !< If present and true, initial conditions are being written
+
+  integer :: rc
+    ! Return code
+
+  ! Create the RESTART directory if absent
+  if (.not. file_exists(directory)) then
+    rc = mkdir(trim(directory), int(o'700'))
+    if (rc == -1) &
+      call MOM_error(FATAL, 'Restart directory could not be created.')
+  endif
 
   call save_restart(directory, time, G, CS%restart_CS, &
       time_stamped=time_stamped, filename=filename, GV=GV, &
