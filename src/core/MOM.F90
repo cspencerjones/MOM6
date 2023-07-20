@@ -162,7 +162,7 @@ use MOM_offline_main,          only : offline_fw_fluxes_into_ocean, offline_fw_f
 use MOM_offline_main,          only : offline_advection_layer, offline_transport_end
 use MOM_ice_shelf,             only : ice_shelf_CS, ice_shelf_query, initialize_ice_shelf
 use MOM_particles_mod,         only : particles, particles_init, particles_run, particles_save_restart, particles_end
-use MOM_particles_mod,         only : particles_to_k_space,particles_to_z_space
+use MOM_particles_mod,         only : particles_to_k_space, particles_to_z_space
 implicit none ; private
 
 #include <MOM_memory.h>
@@ -1542,7 +1542,7 @@ subroutine step_MOM_thermo(CS, G, GV, US, u, v, h, tv, fluxes, dtdia, &
       call preAle_tracer_diagnostics(CS%tracer_Reg, G, GV)
 
       if (CS%use_particles) then
-          call particles_to_z_space(CS%particles,h)
+        call particles_to_z_space(CS%particles, h)
       endif
 
       if (CS%debug) then
@@ -1594,7 +1594,7 @@ subroutine step_MOM_thermo(CS, G, GV, US, u, v, h, tv, fluxes, dtdia, &
 
 
     if (CS%use_particles) then
-       call particles_to_k_space(CS%particles,h)
+      call particles_to_k_space(CS%particles, h)
     endif
 
     dynamics_stencil = min(3, G%Domain%nihalo, G%Domain%njhalo)
@@ -3241,7 +3241,7 @@ subroutine finish_MOM_initialization(Time, dirs, CS, restart_CSp)
   G => CS%G ; GV => CS%GV ; US => CS%US
 
   if (CS%use_particles) then
-    call particles_init(CS%particles, G, CS%Time, CS%dt_therm, CS%u, CS%v,CS%h)
+    call particles_init(CS%particles, G, CS%Time, CS%dt_therm, CS%u, CS%v, CS%h)
   endif
 
   ! Write initial conditions
@@ -3944,7 +3944,7 @@ subroutine save_MOM6_internal_state(CS, dirs, time, stamp_time)
 
     ! Could call save_restart(CS%restart_CSp) here
 
-    if (CS%use_particles) call particles_save_restart(CS%particles,CS%h)
+    if (CS%use_particles) call particles_save_restart(CS%particles, CS%h)
 
 end subroutine save_MOM6_internal_state
 
@@ -3987,7 +3987,7 @@ subroutine MOM_end(CS)
   endif
 
   if (CS%use_particles) then
-    call particles_end(CS%particles,CS%h)
+    call particles_end(CS%particles, CS%h)
     deallocate(CS%particles)
   endif
 
