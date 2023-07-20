@@ -21,10 +21,10 @@ subroutine particles_init(parts, Grid, Time, dt, u, v,h)
  type(particles), pointer, intent(out) :: parts !< Container for all types and memory
  type(ocean_grid_type), target, intent(in) :: Grid !< Grid type from parent model
  type(time_type), intent(in) :: Time !< Time type from parent model
- real, intent(in)            :: dt !< particle timestep in seconds
- real, dimension(:,:,:),intent(in)      :: u !< Zonal velocity field
- real, dimension(:,:,:),intent(in)      :: v !< Meridional velocity field
- real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer
+ real, intent(in)            :: dt !< particle timestep in seconds [s]
+ real, dimension(:,:,:),intent(in)      :: u !< Zonal velocity field [m s-1]
+ real, dimension(:,:,:),intent(in)      :: v !< Meridional velocity field [m s-1]
+ real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer [m]
 end subroutine particles_init
 
 !> The main driver the steps updates particles
@@ -45,7 +45,7 @@ end subroutine particles_run
 subroutine particles_save_restart(parts, h, temp, salt)
   ! Arguments
   type(particles), pointer :: parts !< Container for all types and memory
-  real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer
+  real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer [m]
   real, dimension(:,:,:), optional, intent(in) :: temp !< Optional container for temperature
   real, dimension(:,:,:), optional, intent(in) :: salt !< Optional container for salinity
 
@@ -55,7 +55,7 @@ end subroutine particles_save_restart
 subroutine particles_end(parts,h, temp, salt)
   ! Arguments
   type(particles), pointer :: parts !< Container for all types and memory
-  real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer
+  real, dimension(:,:,:),intent(in)      :: h !< Thickness of each layer [m]
   real, dimension(:,:,:), optional, intent(in) :: temp !< Optional container for temperature
   real, dimension(:,:,:), optional, intent(in) :: salt !< Optional container for salinity
 
@@ -64,7 +64,7 @@ end subroutine particles_end
 subroutine particles_to_k_space(parts,h)
    ! Arguments
    type(particles), pointer :: parts !< Container for all types and memory
-   real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers
+   real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers [m]
 
 end subroutine particles_to_k_space
 
@@ -72,7 +72,7 @@ end subroutine particles_to_k_space
 subroutine particles_to_z_space(parts,h)
    ! Arguments
    type(particles), pointer :: parts !< Container for all types and memory
-   real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers
+   real, dimension(:,:,:),intent(in)      :: h !< Thickness of layers [m]
 
 end subroutine particles_to_z_space
 
