@@ -3944,7 +3944,7 @@ subroutine save_MOM6_internal_state(CS, dirs, time, stamp_time)
 
     ! Could call save_restart(CS%restart_CSp) here
 
-    if (CS%use_particles) call particles_save_restart(CS%particles, CS%h)
+    if (CS%use_particles) call particles_save_restart(CS%particles, CS%h, time, stamp_time)
 
 end subroutine save_MOM6_internal_state
 
