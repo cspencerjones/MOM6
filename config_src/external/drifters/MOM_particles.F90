@@ -28,7 +28,7 @@ subroutine particles_init(parts, Grid, Time, dt, u, v, h)
 end subroutine particles_init
 
 !> The main driver the steps updates particles
-subroutine particles_run(parts, time, uo, vo, ho, tv, stagger)
+subroutine particles_run(parts, time, uo, vo, ho, tv, use_uh, stagger)
   ! Arguments
   type(particles), pointer :: parts !< Container for all types and memory
   type(time_type), intent(in) :: time !< Model time
@@ -36,6 +36,7 @@ subroutine particles_run(parts, time, uo, vo, ho, tv, stagger)
   real, dimension(:,:,:), intent(in) :: vo !< Ocean meridional velocity [L T-1~> m s-1]
   real, dimension(:,:,:), intent(in) :: ho !< Ocean layer thickness [H ~> m or kg m-2]
   type(thermo_var_ptrs),  intent(in) :: tv !< structure containing pointers to available thermodynamic fields
+  logical :: use_uh !< Flag for whether u and v are weighted by thickness
   integer, optional, intent(in) :: stagger !< Flag for whether velocities are staggered
 
 end subroutine particles_run
