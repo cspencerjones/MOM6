@@ -554,8 +554,8 @@ $(WORKSPACE)/work/%/$(1)/ocean.stats $(WORKSPACE)/work/%/$(1)/chksum_diag: build
 	  && $(TIME) $(5) $(MPIRUN) -n $(6) $(abspath $$<) 2> std.err > std.out \
 	  || !( \
 	    mkdir -p ../../../results/$$*/ ; \
-	    cat std.out | tee ../../../results/$$*/std.$(1).out | tail -n 20 ; \
-	    cat std.err | tee ../../../results/$$*/std.$(1).err | tail -n 20 ; \
+	    cat std.out | tee ../../../results/$$*/std.$(1).out | tail -n 40 ; \
+	    cat std.err | tee ../../../results/$$*/std.$(1).err | tail -n 40 ; \
 	    rm ocean.stats chksum_diag ; \
 	    echo -e "$(FAIL): $$*.$(1) failed at runtime." \
 	  )
@@ -571,13 +571,21 @@ endef
 
 # Upload coverage reports
 CODECOV_UPLOADER_URL ?= https://uploader.codecov.io/latest/linux/codecov
+CODECOV_TOKEN ?=
+
+ifdef CODECOV_TOKEN
+  CODECOV_TOKEN_ARG = -t $(CODECOV_TOKEN)
+else
+  CODECOV_TOKEN_ARG =
+endif
+
 codecov:
 	curl -s $(CODECOV_UPLOADER_URL) -o $@
 	chmod +x codecov
 
 .PHONY: report.cov
 report.cov: run.cov codecov
-	./codecov -R build/cov -Z -f "*.gcov" \
+	./codecov $(CODECOV_TOKEN_ARG) -R build/cov -Z -f "*.gcov" \
 	  > build/cov/codecov.out \
 	  2> build/cov/codecov.err \
 	  && echo -e "${MAGENTA}Report uploaded to codecov.${RESET}" \
@@ -630,8 +638,8 @@ $(WORKSPACE)/work/%/restart/ocean.stats: build/symmetric/MOM6 | preproc
 	# Run the first half-period
 	cd $(@D) && $(TIME) $(MPIRUN) -n 1 $(abspath $<) 2> std1.err > std1.out \
 	  || !( \
-	    cat std1.out | tee ../../../results/$*/std.restart1.out | tail -n 20 ; \
-	    cat std1.err | tee ../../../results/$*/std.restart1.err | tail -n 20 ; \
+	    cat std1.out | tee ../../../results/$*/std.restart1.out | tail -n 40 ; \
+	    cat std1.err | tee ../../../results/$*/std.restart1.err | tail -n 40 ; \
 	    echo -e "$(FAIL): $*.restart failed at runtime." \
 	  )
 	# Setup the next inputs
@@ -641,8 +649,8 @@ $(WORKSPACE)/work/%/restart/ocean.stats: build/symmetric/MOM6 | preproc
 	# Run the second half-period
 	cd $(@D) && $(TIME) $(MPIRUN) -n 1 $(abspath $<) 2> std2.err > std2.out \
 	  || !( \
-	    cat std2.out | tee ../../../results/$*/std.restart2.out | tail -n 20 ; \
-	    cat std2.err | tee ../../../results/$*/std.restart2.err | tail -n 20 ; \
+	    cat std2.out | tee ../../../results/$*/std.restart2.out | tail -n 40 ; \
+	    cat std2.err | tee ../../../results/$*/std.restart2.err | tail -n 40 ; \
 	    echo -e "$(FAIL): $*.restart failed at runtime." \
 	  )
 
@@ -652,26 +660,7 @@ $(WORKSPACE)/work/%/restart/ocean.stats: build/symmetric/MOM6 | preproc
 # Not a true rule; only call this after `make test` to summarize test results.
 .PHONY: test.summary
 test.summary:
-	@if ls $(WORKSPACE)/results/*/* &> /dev/null; then \
-	  if ls $(WORKSPACE)/results/*/std.*.err &> /dev/null; then \
-	    echo "The following tests failed to complete:" ; \
-	    ls $(WORKSPACE)/results/*/std.*.out \
-	      | awk '{split($$0,a,"/"); split(a[3],t,"."); v=t[2]; if(length(t)>3) v=v"."t[3]; print a[2],":",v}'; \
-	  fi; \
-	  if ls $(WORKSPACE)/results/*/ocean.stats.*.diff &> /dev/null; then \
-	    echo "The following tests report solution regressions:" ; \
-	    ls $(WORKSPACE)/results/*/ocean.stats.*.diff \
-	      | awk '{split($$0,a,"/"); split(a[3],t,"."); v=t[3]; if(length(t)>4) v=v"."t[4]; print a[2],":",v}'; \
-	  fi; \
-	  if ls $(WORKSPACE)/results/*/chksum_diag.*.diff &> /dev/null; then \
-	    echo "The following tests report diagnostic regressions:" ; \
-	    ls $(WORKSPACE)/results/*/chksum_diag.*.diff \
-	      | awk '{split($$0,a,"/"); split(a[3],t,"."); v=t[2]; if(length(t)>3) v=v"."t[3]; print a[2],":",v}'; \
-	  fi; \
-	  false ; \
-	else \
-	  echo -e "$(PASS): All tests passed!"; \
-	fi
+	@./tools/report_test_results.sh $(WORKSPACE)/results
 
 
 #---
@@ -709,7 +698,7 @@ build/unit/MOM_file_parser_tests.F90.gcov: $(WORKSPACE)/work/unit/std.out
 
 .PHONY: report.cov.unit
 report.cov.unit: build/unit/MOM_file_parser_tests.F90.gcov codecov
-	./codecov -R build/unit -f "*.gcov" -Z -n "Unit tests" \
+	./codecov $(CODECOV_TOKEN_ARG) -R build/unit -f "*.gcov" -Z -n "Unit tests" \
 	    > build/unit/codecov.out \
 	    2> build/unit/codecov.err \
 	  && echo -e "${MAGENTA}Report uploaded to codecov.${RESET}" \

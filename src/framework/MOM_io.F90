@@ -100,6 +100,7 @@ interface MOM_read_data
   module procedure MOM_read_data_2d
   module procedure MOM_read_data_2d_region
   module procedure MOM_read_data_3d
+  module procedure MOM_read_data_3d_region
   module procedure MOM_read_data_4d
 end interface MOM_read_data
 
@@ -137,7 +138,7 @@ end interface MOM_write_field
 interface read_variable
   module procedure read_variable_0d, read_variable_0d_int
   module procedure read_variable_1d, read_variable_1d_int
-  module procedure read_variable_2d
+  module procedure read_variable_2d, read_variable_3d
 end interface read_variable
 
 !> Read a global or variable attribute from a named netCDF file using netCDF calls
@@ -146,6 +147,20 @@ interface read_attribute
   module procedure read_attribute_str, read_attribute_real
   module procedure read_attribute_int32, read_attribute_int64
 end interface read_attribute
+
+!> Type that stores information that can be used to create a non-decomposed axis.
+type :: axis_info
+  character(len=32)  :: name = ""       !< The name of this axis for use in files
+  character(len=256) :: longname = ""   !< A longer name describing this axis
+  character(len=48)  :: units = ""      !< The units of the axis labels
+  character(len=8)   :: cartesian = "N" !< A variable indicating which direction
+                                        !! this axis corresponds with. Valid values
+                                        !! include 'X', 'Y', 'Z', 'T', and 'N' for none.
+  integer            :: sense = 0       !< This is 1 for axes whose values increase upward, or -1
+                                        !! if they increase downward.  The default, 0, is ignored.
+  integer            :: ax_size = 0     !< The number of elements in this axis
+  real, allocatable, dimension(:) :: ax_data !< The values of the data on the axis [arbitrary]
+end type axis_info
 
 !> Type for describing a 3-d variable for output
 type, public :: vardesc
@@ -164,21 +179,8 @@ type, public :: vardesc
   character(len=32)  :: dim_names(5)       !< The names in the file of the axes for this variable
   integer            :: position = -1      !< An integer encoding the horizontal position, it may
                                            !! CENTER, CORNER, EAST_FACE, NORTH_FACE, or 0.
+  type(axis_info) :: extra_axes(5)         !< dimensions other than space-time
 end type vardesc
-
-!> Type that stores information that can be used to create a non-decomposed axis.
-type :: axis_info ; private
-  character(len=32)  :: name = ""       !< The name of this axis for use in files
-  character(len=256) :: longname = ""   !< A longer name describing this axis
-  character(len=48)  :: units = ""      !< The units of the axis labels
-  character(len=8)   :: cartesian = "N" !< A variable indicating which direction
-                                        !! this axis corresponds with. Valid values
-                                        !! include 'X', 'Y', 'Z', 'T', and 'N' for none.
-  integer            :: sense = 0       !< This is 1 for axes whose values increase upward, or -1
-                                        !! if they increase downward.  The default, 0, is ignored.
-  integer            :: ax_size = 0     !< The number of elements in this axis
-  real, allocatable, dimension(:) :: ax_data !< The values of the data on the axis [arbitrary]
-end type axis_info
 
 !> Type that stores for a global file attribute
 type :: attribute_info ; private
@@ -270,7 +272,8 @@ subroutine create_MOM_file(IO_handle, filename, vars, novars, fields, &
                                                      !! required if the new file uses any
                                                      !! vertical grid axes.
   integer(kind=int64),     optional, intent(in) :: checksums(:,:) !< checksums of vars
-  type(axis_info),         optional, intent(in) :: extra_axes(:)  !< Types with information about
+  type(axis_info),         dimension(:), &
+                           optional, intent(in) :: extra_axes !< Types with information about
                                                      !! some axes that might be used in this file
   type(attribute_info),    optional, intent(in) :: global_atts(:) !< Global attributes to
                                                      !! write to this file
@@ -1161,7 +1164,7 @@ subroutine read_variable_2d(filename, varname, var, start, nread, ncid_in)
       allocate(field_nread(field_ndims))
       field_nread(:2) = field_shape(:2)
       field_nread(3:) = 1
-      if (present(nread)) field_shape(:2) = nread(:2)
+      if (present(nread)) field_nread(:2) = nread(:2)
 
       rc = nf90_get_var(ncid, varid, var, field_start, field_nread)
 
@@ -1181,6 +1184,119 @@ subroutine read_variable_2d(filename, varname, var, start, nread, ncid_in)
 
   call broadcast(var, size(var), blocking=.true.)
 end subroutine read_variable_2d
+
+
+subroutine read_variable_3d(filename, varname, var, start, nread, ncid_in)
+  character(len=*), intent(in) :: filename  !< Name of file to be read
+  character(len=*), intent(in) :: varname   !< Name of variable to be read
+  real, intent(out)            :: var(:,:,:)  !< Output array of variable [arbitrary]
+  integer, optional, intent(in) :: start(:) !< Starting index on each axis.
+  integer, optional, intent(in) :: nread(:) !< Number of values to be read along each axis
+  integer, optional, intent(in) :: ncid_in  !< netCDF ID of an opened file.
+              !! If absent, the file is opened and closed within this routine.
+
+  integer :: ncid, varid
+  integer :: field_ndims, dim_len
+  integer, allocatable :: field_dimids(:), field_shape(:)
+  integer, allocatable :: field_start(:), field_nread(:)
+  integer :: i, rc
+  character(len=*), parameter :: hdr = "read_variable_3d: "
+
+  ! Validate shape of start and nread
+  if (present(start)) then
+    if (size(start) < 2) &
+      call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) &
+        // " start must have at least two dimensions.")
+  endif
+
+  if (present(nread)) then
+    if (size(nread) < 2) &
+      call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) &
+        // " nread must have at least two dimensions.")
+
+    if (any(nread(3:) > 1)) &
+      call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) &
+        // " nread may only read a single level in higher dimensions.")
+  endif
+
+  ! Since start and nread may be reshaped, we cannot rely on netCDF to ensure
+  ! that their lengths are equivalent, and must do it here.
+  if (present(start) .and. present(nread)) then
+    if (size(start) /= size(nread)) &
+      call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) &
+        // " start and nread must have the same length.")
+  endif
+
+  ! Open and read `varname` from `filename`
+  if (is_root_pe()) then
+    if (present(ncid_in)) then
+      ncid = ncid_in
+    else
+      call open_file_to_Read(filename, ncid)
+    endif
+
+    call get_varid(varname, ncid, filename, varid, match_case=.false.)
+    if (varid < 0) call MOM_error(FATAL, "Unable to get netCDF varid for "//trim(varname)//&
+                                         " in "//trim(filename))
+
+    ! Query for the dimensionality of the input field
+    rc = nf90_inquire_variable(ncid, varid, ndims=field_ndims)
+    if (rc /= NF90_NOERR) call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) //&
+          ": Difficulties reading "//trim(varname)//" from "//trim(filename))
+
+    ! Confirm that field is at least 2d
+    if (field_ndims < 2) &
+      call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) // " " // &
+          trim(varname) // " from " // trim(filename) // " is not a 2D field.")
+
+    ! If start and nread are present, then reshape them to match field dims
+    if (present(start) .or. present(nread)) then
+      allocate(field_shape(field_ndims))
+      allocate(field_dimids(field_ndims))
+
+      rc = nf90_inquire_variable(ncid, varid, dimids=field_dimids)
+      if (rc /= NF90_NOERR) call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) //&
+            ": Difficulties reading "//trim(varname)//" from "//trim(filename))
+
+      do i = 1, field_ndims
+        rc = nf90_inquire_dimension(ncid, field_dimids(i), len=dim_len)
+        if (rc /= NF90_NOERR) &
+          call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) &
+              // ": Difficulties reading dimensions from " // trim(filename))
+        field_shape(i) = dim_len
+      enddo
+
+      ! Reshape start(:) and nreads(:) in case ranks differ
+      allocate(field_start(field_ndims))
+      field_start(:) = 1
+      if (present(start)) then
+        dim_len = min(size(start), size(field_start))
+        field_start(:dim_len) = start(:dim_len)
+      endif
+
+      allocate(field_nread(field_ndims))
+      field_nread(:3) = field_shape(:3)
+      !field_nread(3:) = 1
+      if (present(nread)) field_nread(:3) = nread(:3)
+
+      rc = nf90_get_var(ncid, varid, var, field_start, field_nread)
+
+      deallocate(field_start)
+      deallocate(field_nread)
+      deallocate(field_shape)
+      deallocate(field_dimids)
+    else
+      rc = nf90_get_var(ncid, varid, var)
+    endif
+
+    if (rc /= NF90_NOERR) call MOM_error(FATAL, hdr // trim(nf90_strerror(rc)) //&
+          " Difficulties reading "//trim(varname)//" from "//trim(filename))
+
+    if (.not.present(ncid_in)) call close_file_to_read(ncid, filename)
+  endif
+
+  call broadcast(var, size(var), blocking=.true.)
+end subroutine read_variable_3d
 
 !> Read a character-string global or variable attribute
 subroutine read_attribute_str(filename, attname, att_val, varname, found, all_read, ncid_in)
@@ -1637,7 +1753,8 @@ end subroutine verify_variable_units
 !! have default values that are empty strings or are appropriate for a 3-d
 !! tracer field at the tracer cell centers.
 function var_desc(name, units, longname, hor_grid, z_grid, t_grid, cmor_field_name, &
-                  cmor_units, cmor_longname, conversion, caller, position, dim_names, fixed) result(vd)
+                  cmor_units, cmor_longname, conversion, caller, position, dim_names, &
+                  extra_axes, fixed) result(vd)
   character(len=*),           intent(in) :: name            !< variable name
   character(len=*), optional, intent(in) :: units           !< variable units
   character(len=*), optional, intent(in) :: longname        !< variable long name
@@ -1658,6 +1775,8 @@ function var_desc(name, units, longname, hor_grid, z_grid, t_grid, cmor_field_na
                                                             !! NORTH_FACE, and 0 for no horizontal dimensions.
   character(len=*), dimension(:), &
                     optional, intent(in) :: dim_names       !< The names of the dimensions of this variable
+  type(axis_info),  dimension(:), &
+                    optional, intent(in) :: extra_axes      !< dimensions other than space-time
   logical,          optional, intent(in) :: fixed           !< If true, this does not evolve with time
   type(vardesc)                          :: vd              !< vardesc type that is created
 
@@ -1681,7 +1800,8 @@ function var_desc(name, units, longname, hor_grid, z_grid, t_grid, cmor_field_na
   call modify_vardesc(vd, units=units, longname=longname, hor_grid=hor_grid, &
                       z_grid=z_grid, t_grid=t_grid, position=position, dim_names=dim_names, &
                       cmor_field_name=cmor_field_name, cmor_units=cmor_units, &
-                      cmor_longname=cmor_longname, conversion=conversion, caller=cllr)
+                      cmor_longname=cmor_longname, conversion=conversion, caller=cllr, &
+                      extra_axes=extra_axes)
 
 end function var_desc
 
@@ -1689,7 +1809,8 @@ end function var_desc
 !> This routine modifies the named elements of a vardesc type.
 !! All arguments are optional, except the vardesc type to be modified.
 subroutine modify_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
-                 cmor_field_name, cmor_units, cmor_longname, conversion, caller, position, dim_names)
+                 cmor_field_name, cmor_units, cmor_longname, conversion, caller, position, dim_names, &
+                 extra_axes)
   type(vardesc),              intent(inout) :: vd              !< vardesc type that is modified
   character(len=*), optional, intent(in)    :: name            !< name of variable
   character(len=*), optional, intent(in)    :: units           !< units of variable
@@ -1711,6 +1832,8 @@ subroutine modify_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
                                                                !! NORTH_FACE, and 0 for no horizontal dimensions.
   character(len=*), dimension(:), &
                     optional, intent(in)    :: dim_names       !< The names of the dimensions of this variable
+  type(axis_info),  dimension(:), &
+                    optional, intent(in)    :: extra_axes      !< dimensions other than space-time
 
   character(len=120) :: cllr
   integer :: n
@@ -1760,6 +1883,12 @@ subroutine modify_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
   if (present(dim_names)) then
     do n=1,min(5,size(dim_names)) ; if (len_trim(dim_names(n)) > 0) then
       call safe_string_copy(dim_names(n), vd%dim_names(n), "vd%dim_names of "//trim(vd%name), cllr)
+    endif ; enddo
+  endif
+
+  if (present(extra_axes)) then
+    do n=1,size(extra_axes) ; if (len_trim(extra_axes(n)%name) > 0) then
+      vd%extra_axes(n) = extra_axes(n)
     endif ; enddo
   endif
 
@@ -1906,7 +2035,7 @@ end function cmor_long_std
 !> This routine queries vardesc
 subroutine query_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
                          cmor_field_name, cmor_units, cmor_longname, conversion, caller, &
-                         position, dim_names)
+                         extra_axes, position, dim_names)
   type(vardesc),              intent(in)  :: vd                 !< vardesc type that is queried
   character(len=*), optional, intent(out) :: name               !< name of variable
   character(len=*), optional, intent(out) :: units              !< units of variable
@@ -1921,6 +2050,8 @@ subroutine query_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
                                                                 !! convert from intensive to extensive
                                                                 !! [various] or [a A-1 ~> 1]
   character(len=*), optional, intent(in)  :: caller             !< calling routine?
+  type(axis_info),  dimension(5), &
+                    optional, intent(out) :: extra_axes      !< dimensions other than space-time
   integer,          optional, intent(out) :: position        !< A coded integer indicating the horizontal position
                                                             !! of this variable if it has such dimensions.
                                                             !! Valid values include CORNER, CENTER, EAST_FACE
@@ -1929,7 +2060,8 @@ subroutine query_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
                     optional, intent(out) :: dim_names       !< The names of the dimensions of this variable
 
   integer :: n
-  character(len=120) :: cllr
+  integer, parameter :: nmax_extraaxes = 5
+  character(len=120) :: cllr, varname
   cllr = "mod_vardesc"
   if (present(caller)) cllr = trim(caller)
 
@@ -1959,6 +2091,19 @@ subroutine query_vardesc(vd, name, units, longname, hor_grid, z_grid, t_grid, &
   if (present(dim_names)) then
     do n=1,min(5,size(dim_names))
       call safe_string_copy(vd%dim_names(n), dim_names(n), "vd%dim_names of "//trim(vd%name), cllr)
+    enddo
+  endif
+
+  if (present(extra_axes)) then
+    ! save_restart expects 5 extra axes (can be empty)
+    do n=1, nmax_extraaxes
+      if (vd%extra_axes(n)%ax_size>=1) then
+        extra_axes(n) = vd%extra_axes(n)
+      else
+        ! return an empty axis
+        write(varname,"('dummy',i1.1)") n
+        call set_axis_info(extra_axes(n), name=trim(varname), ax_size=1)
+      endif
     enddo
   endif
 
@@ -2198,6 +2343,42 @@ subroutine MOM_read_data_3d(filename, fieldname, data, MOM_Domain, &
   endif
 end subroutine MOM_read_data_3d
 
+!> Read a 3d region array from file using infrastructure I/O.
+subroutine MOM_read_data_3d_region(filename, fieldname, data, start, nread, MOM_domain, &
+                                   no_domain, scale, turns)
+  character(len=*), intent(in)  :: filename   !< Input filename
+  character(len=*), intent(in)  :: fieldname  !< Field variable name
+  real, dimension(:,:,:), intent(inout) :: data !< Field value in arbitrary units [A ~> a]
+  integer, dimension(:), intent(in) :: start  !< Starting index for each axis.
+  integer, dimension(:), intent(in) :: nread  !< Number of values to read along each axis.
+  type(MOM_domain_type), optional, intent(in) :: MOM_Domain !< Model domain decomposition
+  logical, optional, intent(in) :: no_domain  !< If true, field does not use
+                                              !! domain decomposion.
+  real, optional, intent(in)    :: scale      !< A scaling factor that the variable is multiplied by
+                                              !! before it is returned to convert from the units in the file
+                                              !! to the internal units for this variable [A a-1 ~> 1]
+  integer, optional, intent(in) :: turns      !< Number of quarter turns from
+                                              !! input to model grid
+
+  integer :: qturns                   ! Number of quarter turns
+  real, allocatable :: data_in(:,:,:)   ! Field array on the input grid in arbitrary units [A ~> a]
+
+  qturns = 0
+  if (present(turns)) qturns = modulo(turns, 4)
+
+  if (qturns == 0) then
+    call read_field(filename, fieldname, data, start, nread, &
+      MOM_Domain=MOM_Domain, no_domain=no_domain, scale=scale &
+    )
+  else
+    call allocate_rotated_array(data, [1,1,1], -qturns, data_in)
+    call read_field(filename, fieldname, data_in, start, nread, &
+      MOM_Domain=MOM_Domain%domain_in, no_domain=no_domain, scale=scale &
+    )
+    call rotate_array(data_in, qturns, data)
+    deallocate(data_in)
+  endif
+end subroutine MOM_read_data_3d_region
 
 !> Read a 4d array from file using infrastructure I/O.
 subroutine MOM_read_data_4d(filename, fieldname, data, MOM_Domain, &
