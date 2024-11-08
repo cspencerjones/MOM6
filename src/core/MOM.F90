@@ -1271,7 +1271,7 @@ subroutine step_MOM_dynamics(forces, p_surf_begin, p_surf_end, dt, dt_thermo, &
       "This is usually a bad combination.")
     !Run particles using unweighted velocity
     call particles_run(CS%particles, Time_local, CS%u, CS%v, CS%h, &
-                       CS%tv, CS%t_dyn_rel_adv, CS%use_uh_particles)
+                       CS%tv, dt, CS%use_uh_particles)
     call particles_to_z_space(CS%particles, h) 
   endif
 
